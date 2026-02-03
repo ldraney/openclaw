@@ -215,11 +215,18 @@ async function resolveGlobPattern(pattern: string): Promise<string[]> {
     return allFiles;
   }
 
-  // Filter by suffix pattern
+  // Filter by suffix pattern (e.g., "sessions/*.jsonl" or "*.jsonl")
   return allFiles.filter((file) => {
-    if (suffix.startsWith("*")) {
-      const ext = suffix.slice(1);
-      return file.endsWith(ext);
+    // Handle patterns like "sessions/*.jsonl" - split into path component and extension
+    if (suffix.includes("*")) {
+      const suffixParts = suffix.split("*");
+      const requiredPath = suffixParts[0]?.replace(/\/+$/, ""); // e.g., "sessions"
+      const requiredExt = suffixParts[1] ?? ""; // e.g., ".jsonl"
+
+      const matchesPath = !requiredPath || file.includes(path.sep + requiredPath + path.sep);
+      const matchesExt = !requiredExt || file.endsWith(requiredExt);
+
+      return matchesPath && matchesExt;
     }
     return file.endsWith(suffix);
   });
