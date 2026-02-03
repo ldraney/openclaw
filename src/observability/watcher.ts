@@ -58,14 +58,7 @@ export function createWatcher(
   const pollInterval = options.pollInterval ?? DEFAULT_POLL_INTERVAL;
   const ignoreInitial = !options.emitExisting;
 
-  // Build a map from pattern to source type for resolving events
-  const patternToSourceType = new Map<string, SourceType>();
-  const patterns: string[] = [];
-
-  for (const wp of watchedPaths) {
-    patternToSourceType.set(wp.pattern, wp.sourceType);
-    patterns.push(wp.pattern);
-  }
+  const patterns = watchedPaths.map((wp) => wp.pattern);
 
   const watcher = chokidar.watch(patterns, {
     ignoreInitial,
@@ -128,7 +121,7 @@ export function createWatcher(
  * Checks if a file path matches a glob pattern.
  * Simple implementation for common patterns.
  */
-function matchesPattern(filePath: string, pattern: string): boolean {
+export function matchesPattern(filePath: string, pattern: string): boolean {
   // Handle exact file paths
   if (!pattern.includes("*")) {
     return filePath === pattern || filePath.startsWith(pattern + path.sep);

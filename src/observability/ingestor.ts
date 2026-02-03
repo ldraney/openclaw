@@ -16,6 +16,7 @@ import {
 import { readNewLines } from "./tail-reader.js";
 import {
   createWatcher,
+  matchesPattern,
   resolveWatchedFiles,
   type FileChangeEvent,
   type WatchedPath,
@@ -78,6 +79,7 @@ export class ObservabilityIngestor {
   private watcher: FSWatcher | null = null;
   private pendingFiles = new Set<string>();
   private ingestTimer: NodeJS.Timeout | null = null;
+  private processing = false;
   private closed = false;
 
   constructor(options: IngestorOptions = {}) {
@@ -104,6 +106,9 @@ export class ObservabilityIngestor {
    * Starts watching for file changes and ingesting new data.
    */
   async startWatching(): Promise<void> {
+    if (this.closed) {
+      throw new Error("Ingestor is closed");
+    }
     if (this.watcher) {
       log.warn("Watcher already running");
       return;
@@ -142,6 +147,9 @@ export class ObservabilityIngestor {
    * Ingests all existing files once (no watching).
    */
   async ingestExisting(): Promise<{ files: number; events: number }> {
+    if (this.closed) {
+      throw new Error("Ingestor is closed");
+    }
     const files = await resolveWatchedFiles(this.watchedPaths);
     let totalEvents = 0;
 
@@ -164,6 +172,9 @@ export class ObservabilityIngestor {
    * Ingests a single file, reading from the last known cursor position.
    */
   async ingestFile(filePath: string, sourceType: SourceType): Promise<number> {
+    if (this.closed) {
+      return 0;
+    }
     const tracked = getTrackedFile(this.db, filePath);
     const cursor = tracked?.byteOffset ?? 0;
 
@@ -264,19 +275,35 @@ export class ObservabilityIngestor {
    * Processes all pending file changes.
    */
   private async processPendingFiles(): Promise<void> {
-    const files = Array.from(this.pendingFiles);
-    this.pendingFiles.clear();
+    if (this.closed || this.processing) {
+      return;
+    }
+    this.processing = true;
 
-    for (const filePath of files) {
-      const sourceType = this.getSourceTypeForFile(filePath);
-      if (!sourceType) {
-        continue;
+    try {
+      const files = Array.from(this.pendingFiles);
+      this.pendingFiles.clear();
+
+      for (const filePath of files) {
+        if (this.closed) {
+          break;
+        }
+        const sourceType = this.getSourceTypeForFile(filePath);
+        if (!sourceType) {
+          continue;
+        }
+
+        try {
+          await this.ingestFile(filePath, sourceType);
+        } catch (err) {
+          log.error(`Failed to ingest ${filePath}: ${String(err)}`);
+        }
       }
-
-      try {
-        await this.ingestFile(filePath, sourceType);
-      } catch (err) {
-        log.error(`Failed to ingest ${filePath}: ${String(err)}`);
+    } finally {
+      this.processing = false;
+      // If new files arrived while processing, schedule another run
+      if (this.pendingFiles.size > 0 && !this.closed) {
+        this.scheduleIngest();
       }
     }
   }
@@ -286,33 +313,11 @@ export class ObservabilityIngestor {
    */
   private getSourceTypeForFile(filePath: string): SourceType | null {
     for (const wp of this.watchedPaths) {
-      if (this.matchesPattern(filePath, wp.pattern)) {
+      if (matchesPattern(filePath, wp.pattern)) {
         return wp.sourceType;
       }
     }
     return null;
-  }
-
-  /**
-   * Checks if a file matches a watched pattern.
-   */
-  private matchesPattern(filePath: string, pattern: string): boolean {
-    if (!pattern.includes("*")) {
-      return filePath === pattern || filePath.startsWith(pattern + path.sep);
-    }
-
-    if (pattern.includes("**")) {
-      const parts = pattern.split("**");
-      const prefix = parts[0]?.replace(/\/$/, "") ?? "";
-      const suffix = parts[1]?.replace(/^\//, "") ?? "";
-
-      const matchesPrefix = !prefix || filePath.startsWith(prefix);
-      const matchesSuffix = !suffix || filePath.endsWith(suffix);
-
-      return matchesPrefix && matchesSuffix;
-    }
-
-    return false;
   }
 
   /**
@@ -325,6 +330,9 @@ export class ObservabilityIngestor {
     totalEvents: number;
     eventsByType: Record<string, number>;
   } {
+    if (this.closed) {
+      throw new Error("Ingestor is closed");
+    }
     const trackedFilesRow = this.db
       .prepare("SELECT COUNT(*) as count FROM tracked_files")
       .get() as { count: number };
