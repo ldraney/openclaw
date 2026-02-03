@@ -1,0 +1,115 @@
+{
+  "version": "1.0",
+  "enforcement": "hard",
+  "rules": {
+    "require-issue": {
+      "description": "Require GitHub issue for code changes",
+      "events": [
+        "PreToolUse"
+      ],
+      "matcher": "Write|Edit",
+      "validator": "validators/require-issue.sh",
+      "enabled": true
+    },
+    "no-main-commit": {
+      "description": "Block commits on main/master and require issue branch",
+      "events": [
+        "PreToolUse"
+      ],
+      "matcher": "Bash",
+      "condition": "git.*commit",
+      "validator": "validators/no-main-commit.sh",
+      "enabled": true
+    },
+    "push-before-switch": {
+      "description": "Require push before switching branches",
+      "events": [
+        "PreToolUse"
+      ],
+      "matcher": "Bash",
+      "condition": "git (checkout|switch)|git -C [^ ]+ (checkout|switch)",
+      "validator": "validators/push-before-switch.sh",
+      "enabled": true
+    }
+  },
+  "logging": {
+    "enabled": true,
+    "stderr": true,
+    "file": "~/.claude/logs/sop-hooks.jsonl",
+    "events": [
+      "PreToolUse",
+      "PostToolUse",
+      "PostToolUseFailure",
+      "UserPromptSubmit",
+      "Stop",
+      "SessionStart",
+      "SessionEnd",
+      "SubagentStart",
+      "SubagentStop",
+      "PreCompact",
+      "Notification"
+    ],
+    "include_blocked_only": false,
+    "handler": "loggers/log-event.sh"
+  },
+  "subagents": {
+    "inherit_rules": true
+  },
+  "mcp": {
+    "dev-sop-engine": {
+      "command": "node",
+      "args": [
+        "./dist/mcp-server.js"
+      ]
+    }
+  },
+  "skills": {
+    "workflow": {
+      "description": "Development workflow and Project Law philosophy",
+      "content_file": "./skills/workflow.md"
+    },
+    "mcpb-release": {
+      "description": "MCP prerelease QA workflow for Claude Desktop testing",
+      "content_file": "./skills/mcpb-release.md"
+    },
+    "sop-onboard": {
+      "description": "Step-by-step playbook to set up dev-sop-engine in any project",
+      "content_file": "./skills/sop-onboard.md"
+    }
+  },
+  "agents": {
+    "dev-philosophy": {
+      "description": "Reviews work for philosophy compliance",
+      "prompt_file": "./agents/dev-philosophy.md",
+      "tools": [
+        "Read",
+        "Glob",
+        "Grep",
+        "Bash"
+      ]
+    },
+    "sop-expert": {
+      "description": "Helps configure dev-sop-engine: skills, agents, MCP servers, rules, and hooks",
+      "prompt_file": "./agents/sop-expert.md",
+      "tools": [
+        "Read",
+        "Glob",
+        "Grep",
+        "Edit",
+        "Write"
+      ]
+    },
+    "sop-onboard": {
+      "description": "Scaffolds sop/ and sop.json in new projects following the onboarding playbook",
+      "prompt_file": "./agents/sop-onboard.md",
+      "tools": [
+        "Read",
+        "Glob",
+        "Grep",
+        "Edit",
+        "Write",
+        "Bash"
+      ]
+    }
+  }
+}

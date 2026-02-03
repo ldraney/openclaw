@@ -61,6 +61,7 @@ apps/ios/*.dSYM.zip
 # provisioning profiles (local)
 apps/ios/*.mobileprovision
 .env
+.mcp.json
 
 # Local untracked files
 .local/
