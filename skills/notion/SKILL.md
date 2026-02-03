@@ -15,16 +15,62 @@ Use the Notion API to create/read/update pages, data sources (databases), and bl
 
 ## Setup
 
-1. Create an integration at https://notion.so/my-integrations
-2. Copy the API key (starts with `ntn_` or `secret_`)
-3. Store it:
+### Step 1: Create a Notion Integration
+
+1. Go to https://notion.so/my-integrations
+2. Click **New integration**
+3. Name it (e.g., "OpenClaw")
+4. Select your workspace
+5. Click **Submit**
+6. Copy the **Internal Integration Secret** (starts with `ntn_` or `secret_`)
+
+### Step 2: Store the API Key
 
 ```bash
 mkdir -p ~/.config/notion
 echo "ntn_your_key_here" > ~/.config/notion/api_key
+chmod 600 ~/.config/notion/api_key
 ```
 
-4. Share target pages/databases with your integration (click "..." → "Connect to" → your integration name)
+Or set as environment variable:
+
+```bash
+export NOTION_API_KEY="ntn_your_key_here"
+```
+
+### Step 3: Share Pages with Your Integration (Required)
+
+> **Important:** Internal integrations can only access pages explicitly shared with them. You must complete this step before the agent can see or create any content.
+
+1. Open a page or database in Notion
+2. Click the **"..."** menu (top right)
+3. Click **"Connect to"** (or "Add connections")
+4. Select your integration name
+5. Repeat for any pages/databases you want accessible
+
+Without this step, searches return empty and page creation fails.
+
+### Verify Setup
+
+```bash
+NOTION_KEY=$(cat ~/.config/notion/api_key)
+curl -s -X POST "https://api.notion.com/v1/search" \
+  -H "Authorization: Bearer $NOTION_KEY" \
+  -H "Notion-Version: 2025-09-03" \
+  -H "Content-Type: application/json" \
+  -d '{}' | jq '.results | length'
+```
+
+If this returns `0`, you haven't shared any pages with your integration yet.
+
+## Troubleshooting
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Search returns empty | No pages shared with integration | Share pages in Notion UI (Step 3) |
+| "unauthorized" error | Invalid or missing API key | Check `~/.config/notion/api_key` exists and is correct |
+| Can't create workspace pages | Internal integrations can't create top-level pages | Create pages under a shared parent page instead |
+| "object not found" | Page/database not shared with integration | Share that specific page with your integration |
 
 ## API Basics
 
@@ -68,7 +114,22 @@ curl "https://api.notion.com/v1/blocks/{page_id}/children" \
   -H "Notion-Version: 2025-09-03"
 ```
 
-**Create page in a data source:**
+**Create page under a parent page:**
+
+```bash
+curl -X POST "https://api.notion.com/v1/pages" \
+  -H "Authorization: Bearer $NOTION_KEY" \
+  -H "Notion-Version: 2025-09-03" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parent": {"page_id": "your-parent-page-id"},
+    "properties": {
+      "title": {"title": [{"text": {"content": "New Page"}}]}
+    }
+  }'
+```
+
+**Create page in a database:**
 
 ```bash
 curl -X POST "https://api.notion.com/v1/pages" \
@@ -164,9 +225,11 @@ Common property formats for database items:
 - **Parent in responses:** Pages show `parent.data_source_id` alongside `parent.database_id`
 - **Finding the data_source_id:** Search for the database, or call `GET /v1/data_sources/{data_source_id}`
 
-## Notes
+## Limitations
 
+- **Internal integrations** cannot create workspace-level (top-level) pages; use a parent page
+- **Page sharing is manual** — must be done in Notion UI, not via API
+- **Rate limit:** ~3 requests/second average
+- **View filters** cannot be set via API (UI-only)
 - Page/database IDs are UUIDs (with or without dashes)
-- The API cannot set database view filters — that's UI-only
-- Rate limit: ~3 requests/second average
 - Use `is_inline: true` when creating data sources to embed them in pages
