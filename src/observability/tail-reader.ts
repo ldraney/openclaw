@@ -130,6 +130,7 @@ export async function readNewLines(params: {
 }): Promise<{
   lines: string[];
   newCursor: number;
+  fileSize: number;
   reset: boolean;
 }> {
   const result = await readLogSlice({
@@ -141,6 +142,7 @@ export async function readNewLines(params: {
   return {
     lines: result.lines,
     newCursor: result.cursor,
+    fileSize: result.size,
     reset: result.reset,
   };
 }

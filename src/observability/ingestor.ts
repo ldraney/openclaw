@@ -167,7 +167,7 @@ export class ObservabilityIngestor {
     const tracked = getTrackedFile(this.db, filePath);
     const cursor = tracked?.byteOffset ?? 0;
 
-    const { lines, newCursor, reset } = await readNewLines({
+    const { lines, newCursor, fileSize, reset } = await readNewLines({
       file: filePath,
       cursor,
     });
@@ -192,7 +192,7 @@ export class ObservabilityIngestor {
       path: filePath,
       sourceType,
       byteOffset: newCursor,
-      fileSize: newCursor,
+      fileSize,
     });
 
     log.debug(`Ingested ${events.length} events from ${filePath}`, {
